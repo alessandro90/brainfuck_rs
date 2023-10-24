@@ -71,7 +71,7 @@ impl Cells {
 
 struct Source {
     pos: usize,
-    data: String,
+    data: Vec<char>,
     nest_l_square: usize,
     nest_r_square: usize,
 }
@@ -80,26 +80,29 @@ impl Source {
     fn new(data: String) -> Self {
         Source {
             pos: 0,
-            data,
+            data: data.chars().collect(),
             nest_l_square: 0,
             nest_r_square: 0,
         }
     }
 
-    fn get_current(&self) -> Option<char> {
-        self.data.chars().nth(self.pos)
+    fn get_current(&self) -> char {
+        self.data[self.pos]
     }
 
-    fn advance(&mut self) {
+    fn advance(&mut self) -> Option<()> {
         // end plus 1 us allowed
-        if self.pos < self.data.len() {
+        if self.pos < self.data.len() - 1 {
             self.pos += 1;
+            Some(())
+        } else {
+            None
         }
     }
 
     fn exit_loop(&mut self) -> Result<(), Error> {
-        while let Some(c) = self.get_current() {
-            match c {
+        loop {
+            match self.get_current() {
                 ']' => {
                     if self.nest_l_square > 0 {
                         self.nest_l_square -= 1;
@@ -109,21 +112,15 @@ impl Source {
                         break;
                     }
                 }
-                _ => {
-                    if self.pos < TAPE_SIZE - 1 {
-                        self.pos += 1;
-                    } else {
-                        return Err(Error::MissingClosingBraket);
-                    }
-                }
+                _ => self.advance().ok_or(Error::MissingClosingBraket)?,
             }
         }
         Ok(())
     }
 
     fn iterate(&mut self) -> Result<(), Error> {
-        while let Some(c) = self.get_current() {
-            match c {
+        loop {
+            match self.get_current() {
                 '[' => {
                     if self.nest_r_square > 0 {
                         self.nest_r_square -= 1;
@@ -150,14 +147,14 @@ fn read_u8_from_stdin() -> Result<u8, Error> {
     io::stdin()
         .read_line(&mut input)
         .map_err(|_| Error::StdinReadFail)?;
-    input.trim().parse::<u8>().map_err(|_| Error::StdinReadFail)
+    input.trim().parse().map_err(|_| Error::StdinReadFail)
 }
 
 pub fn interpret(src: String) -> Result<(), Error> {
     let mut buffer = Cells::default();
     let mut source = Source::new(src);
-    while let Some(c) = source.get_current() {
-        match c {
+    loop {
+        match source.get_current() {
             '[' => {
                 if buffer.get() != 0 {
                     source.nest_l_square += 1;
@@ -182,9 +179,10 @@ pub fn interpret(src: String) -> Result<(), Error> {
             ',' => buffer.set(read_u8_from_stdin()?),
             _ => (), // Comment
         }
-        source.advance();
+        if source.advance().is_none() {
+            return Ok(());
+        }
     }
-    Ok(())
 }
 
 #[cfg(test)]
