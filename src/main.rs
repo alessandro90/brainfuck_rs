@@ -15,7 +15,7 @@ fn main() {
     let src_code =
         fs::read_to_string(fname).unwrap_or_else(|_| panic!("Cannot read file {}", fname));
     match interpret(src_code) {
-        Some(_) => println!("Program completed."),
-        None => println!("Program exited with error."),
+        Ok(_) => println!("Program completed without errors."),
+        Err(e) => eprintln!("Program exited with error: {:?}", e),
     };
 }
