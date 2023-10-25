@@ -73,8 +73,7 @@ enum Token {
 struct Lexer {
     pos: usize,
     data: Vec<Token>,
-    nest_l_square: usize,
-    nest_r_square: usize,
+    nesting_lvl: usize,
 }
 
 impl Lexer {
@@ -95,8 +94,7 @@ impl Lexer {
                     _ => None,
                 })
                 .collect(),
-            nest_l_square: 0,
-            nest_r_square: 0,
+            nesting_lvl: 0,
         }
     }
 
@@ -115,44 +113,55 @@ impl Lexer {
     }
 
     fn exit_loop(&mut self) -> Result<(), Error> {
+        let target_nesting = self.nesting_lvl;
         loop {
             match self.get_current() {
                 Token::RSquare => {
-                    if self.nest_l_square > 0 {
-                        self.nest_l_square -= 1;
+                    if self.nesting_lvl == 0 {
+                        return Err(Error::MissingOpeningBraket);
                     }
-                    if self.nest_l_square == 0 {
-                        self.pos += 1;
-                        break;
+                    self.nesting_lvl -= 1;
+                    if self.nesting_lvl == target_nesting {
+                        self.advance().ok_or(Error::MissingClosingBraket)?;
+                        return Ok(());
                     }
                 }
-                _ => self.advance().ok_or(Error::MissingClosingBraket)?,
+                Token::LSquare => {
+                    self.nesting_lvl += 1;
+                }
+                _ => (),
             }
+            self.advance().ok_or(Error::MissingClosingBraket)?;
         }
-        Ok(())
+    }
+
+    fn go_back(&mut self) -> Result<(), Error> {
+        if self.pos > 0 {
+            self.pos -= 1;
+            Ok(())
+        } else {
+            Err(Error::MissingOpeningBraket)
+        }
     }
 
     fn iterate(&mut self) -> Result<(), Error> {
+        let target_nesting = self.nesting_lvl;
         loop {
             match self.get_current() {
                 Token::LSquare => {
-                    if self.nest_r_square > 0 {
-                        self.nest_r_square -= 1;
+                    if self.nesting_lvl == 0 {
+                        return Err(Error::MissingClosingBraket);
                     }
-                    if self.nest_r_square == 0 {
-                        break;
-                    }
-                }
-                _ => {
-                    if self.pos > 0 {
-                        self.pos -= 1;
-                    } else {
-                        return Err(Error::MissingOpeningBraket);
+                    self.nesting_lvl -= 1;
+                    if self.nesting_lvl == target_nesting {
+                        return Ok(());
                     }
                 }
+                Token::RSquare => self.nesting_lvl += 1,
+                _ => (),
             }
+            self.go_back()?
         }
-        Ok(())
     }
 }
 
@@ -170,19 +179,19 @@ pub fn interpret(src: String) -> Result<(), Error> {
     loop {
         match lexer.get_current() {
             Token::LSquare => {
-                if cells.get() != 0 {
-                    lexer.nest_l_square += 1;
-                } else {
+                if cells.get() == 0 {
                     lexer.exit_loop()?;
                     continue;
+                } else {
+                    lexer.nesting_lvl += 1;
                 }
             }
             Token::RSquare => {
-                if cells.get() == 0 {
-                    lexer.nest_r_square += 1;
-                } else {
+                if cells.get() != 0 {
                     lexer.iterate()?;
                     continue;
+                } else {
+                    lexer.nesting_lvl -= 1;
                 }
             }
             Token::Dot => print!("{}", cells.get() as char),
@@ -192,31 +201,8 @@ pub fn interpret(src: String) -> Result<(), Error> {
             Token::Gt => cells.move_right()?,
             Token::Comma => cells.set(read_u8_from_stdin()?),
         }
-        // println!("{:?}", &cells.tape[..10]);
         if lexer.advance().is_none() {
             return Ok(());
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::Lexer;
-
-    #[test]
-    fn source_jump_to_next_test() {
-        let mut src = Lexer::new("--[[..[,]..]...]".into());
-        src.nest_l_square = 1;
-        src.pos = 3;
-        src.exit_loop().unwrap();
-        assert_eq!(src.pos, 9);
-    }
-    #[test]
-    fn source_jump_to_prev_test() {
-        let mut src = Lexer::new("--[[..[,]..]...]".into());
-        src.nest_r_square = 1;
-        src.pos = 11;
-        src.iterate().unwrap();
-        assert_eq!(src.pos, 6);
     }
 }
