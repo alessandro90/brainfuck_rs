@@ -27,23 +27,11 @@ impl Default for Cells {
 }
 
 impl Cells {
-    fn incr(&mut self) -> Result<(), Error> {
-        let cell = &mut self.tape[self.pos];
-        if *cell < u8::MAX {
-            *cell += 1;
-            Ok(())
-        } else {
-            Err(Error::CellOverflow)
-        }
+    fn incr(&mut self) {
+        self.tape[self.pos] = self.tape[self.pos].wrapping_add(1);
     }
-    fn decr(&mut self) -> Result<(), Error> {
-        let cell = &mut self.tape[self.pos];
-        if *cell > 0 {
-            *cell -= 1;
-            Ok(())
-        } else {
-            Err(Error::CellUnderflow)
-        }
+    fn decr(&mut self) {
+        self.tape[self.pos] = self.tape[self.pos].wrapping_sub(1);
     }
     fn get(&self) -> u8 {
         self.tape[self.pos]
@@ -198,12 +186,13 @@ pub fn interpret(src: String) -> Result<(), Error> {
                 }
             }
             Token::Dot => print!("{}", cells.get() as char),
-            Token::Minus => cells.decr()?,
-            Token::Plus => cells.incr()?,
+            Token::Minus => cells.decr(),
+            Token::Plus => cells.incr(),
             Token::Lt => cells.move_left()?,
             Token::Gt => cells.move_right()?,
             Token::Comma => cells.set(read_u8_from_stdin()?),
         }
+        // println!("{:?}", &cells.tape[..10]);
         if lexer.advance().is_none() {
             return Ok(());
         }
