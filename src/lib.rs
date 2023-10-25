@@ -2,7 +2,7 @@ use std::io;
 
 const TAPE_SIZE: usize = 30_000;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Error {
     MissingClosingBraket,
     MissingOpeningBraket,
@@ -69,24 +69,50 @@ impl Cells {
     }
 }
 
-struct Source {
+#[repr(u8)]
+#[derive(Clone, Copy)]
+enum Token {
+    RSquare,
+    LSquare,
+    Dot,
+    Minus,
+    Plus,
+    Lt,
+    Gt,
+    Comma,
+}
+
+struct Lexer {
     pos: usize,
-    data: Vec<char>,
+    data: Vec<Token>,
     nest_l_square: usize,
     nest_r_square: usize,
 }
 
-impl Source {
+impl Lexer {
     fn new(data: String) -> Self {
-        Source {
+        Lexer {
             pos: 0,
-            data: data.chars().collect(),
+            data: data
+                .chars()
+                .filter_map(|c| match c {
+                    '[' => Some(Token::LSquare),
+                    ']' => Some(Token::RSquare),
+                    '.' => Some(Token::Dot),
+                    '-' => Some(Token::Minus),
+                    '+' => Some(Token::Plus),
+                    '<' => Some(Token::Lt),
+                    '>' => Some(Token::Gt),
+                    ',' => Some(Token::Comma),
+                    _ => None,
+                })
+                .collect(),
             nest_l_square: 0,
             nest_r_square: 0,
         }
     }
 
-    fn get_current(&self) -> char {
+    fn get_current(&self) -> Token {
         self.data[self.pos]
     }
 
@@ -103,7 +129,7 @@ impl Source {
     fn exit_loop(&mut self) -> Result<(), Error> {
         loop {
             match self.get_current() {
-                ']' => {
+                Token::RSquare => {
                     if self.nest_l_square > 0 {
                         self.nest_l_square -= 1;
                     }
@@ -121,7 +147,7 @@ impl Source {
     fn iterate(&mut self) -> Result<(), Error> {
         loop {
             match self.get_current() {
-                '[' => {
+                Token::LSquare => {
                     if self.nest_r_square > 0 {
                         self.nest_r_square -= 1;
                     }
@@ -151,35 +177,34 @@ fn read_u8_from_stdin() -> Result<u8, Error> {
 }
 
 pub fn interpret(src: String) -> Result<(), Error> {
-    let mut buffer = Cells::default();
-    let mut source = Source::new(src);
+    let mut cells = Cells::default();
+    let mut lexer = Lexer::new(src);
     loop {
-        match source.get_current() {
-            '[' => {
-                if buffer.get() != 0 {
-                    source.nest_l_square += 1;
+        match lexer.get_current() {
+            Token::LSquare => {
+                if cells.get() != 0 {
+                    lexer.nest_l_square += 1;
                 } else {
-                    source.exit_loop()?;
+                    lexer.exit_loop()?;
                     continue;
                 }
             }
-            ']' => {
-                if buffer.get() == 0 {
-                    source.nest_r_square += 1;
+            Token::RSquare => {
+                if cells.get() == 0 {
+                    lexer.nest_r_square += 1;
                 } else {
-                    source.iterate()?;
+                    lexer.iterate()?;
                     continue;
                 }
             }
-            '.' => print!("{}", buffer.get() as char),
-            '-' => buffer.decr()?,
-            '+' => buffer.incr()?,
-            '<' => buffer.move_left()?,
-            '>' => buffer.move_right()?,
-            ',' => buffer.set(read_u8_from_stdin()?),
-            _ => (), // Comment
+            Token::Dot => print!("{}", cells.get() as char),
+            Token::Minus => cells.decr()?,
+            Token::Plus => cells.incr()?,
+            Token::Lt => cells.move_left()?,
+            Token::Gt => cells.move_right()?,
+            Token::Comma => cells.set(read_u8_from_stdin()?),
         }
-        if source.advance().is_none() {
+        if lexer.advance().is_none() {
             return Ok(());
         }
     }
@@ -187,11 +212,11 @@ pub fn interpret(src: String) -> Result<(), Error> {
 
 #[cfg(test)]
 mod test {
-    use crate::Source;
+    use crate::Lexer;
 
     #[test]
     fn source_jump_to_next_test() {
-        let mut src = Source::new("--[[..[,]..]...]".into());
+        let mut src = Lexer::new("--[[..[,]..]...]".into());
         src.nest_l_square = 1;
         src.pos = 3;
         src.exit_loop().unwrap();
@@ -199,7 +224,7 @@ mod test {
     }
     #[test]
     fn source_jump_to_prev_test() {
-        let mut src = Source::new("--[[..[,]..]...]".into());
+        let mut src = Lexer::new("--[[..[,]..]...]".into());
         src.nest_r_square = 1;
         src.pos = 11;
         src.iterate().unwrap();
