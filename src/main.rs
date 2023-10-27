@@ -1,6 +1,6 @@
 use std::{env, fs};
 
-use brainfuck_rs::interpret;
+use brainfuck_rs::{Interpreter, Lexer};
 
 fn main() {
     let args: Vec<_> = env::args().collect();
@@ -14,7 +14,9 @@ fn main() {
     let fname = args[1].as_str();
     let src_code =
         fs::read_to_string(fname).unwrap_or_else(|_| panic!("Cannot read file {}", fname));
-    if let Err(e) = interpret(src_code) {
+    let lexer = Lexer::new(src_code);
+    let mut interpreter = Interpreter::new(lexer);
+    if let Err(e) = interpreter.interpret() {
         eprintln!("Program exited with error: {:?}", e);
     }
 }
