@@ -1,6 +1,6 @@
 use std::io;
 
-const TAPE_SIZE: usize = 30_000;
+const INITIAL_TAPE_SIZE: usize = 30_000;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Error {
@@ -8,21 +8,17 @@ pub enum Error {
     MissingOpeningBraket,
     StdinReadFail,
     EOT, // End Of Tape
-    CellOverflow,
-    CellUnderflow,
 }
 
 struct Cells {
     pos: usize,
-    tape: [u8; TAPE_SIZE],
+    tape: Vec<u8>,
 }
 
 impl Default for Cells {
     fn default() -> Self {
-        Cells {
-            pos: 0,
-            tape: [0; TAPE_SIZE],
-        }
+        let tape = vec![0u8; INITIAL_TAPE_SIZE];
+        Cells { pos: 0, tape }
     }
 }
 
@@ -36,13 +32,11 @@ impl Cells {
     fn get(&self) -> u8 {
         self.tape[self.pos]
     }
-    fn move_right(&mut self) -> Result<(), Error> {
-        if self.pos < TAPE_SIZE - 1 {
-            self.pos += 1;
-            Ok(())
-        } else {
-            Err(Error::EOT)
+    fn move_right(&mut self) {
+        if self.pos >= self.tape.len() {
+            self.tape.push(0);
         }
+        self.pos += 1;
     }
     fn move_left(&mut self) -> Result<(), Error> {
         if self.pos > 0 {
@@ -198,7 +192,7 @@ pub fn interpret(src: String) -> Result<(), Error> {
             Token::Minus => cells.decr(),
             Token::Plus => cells.incr(),
             Token::Lt => cells.move_left()?,
-            Token::Gt => cells.move_right()?,
+            Token::Gt => cells.move_right(),
             Token::Comma => cells.set(read_u8_from_stdin()?),
         }
         if lexer.advance().is_none() {
