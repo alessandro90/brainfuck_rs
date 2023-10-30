@@ -13,7 +13,7 @@ pub fn run_repl() {
         print!("$ ");
         io::stdout().flush().unwrap();
         io::stdin().read_line(&mut input).expect("Invalid input");
-        if input.is_empty() || input.ends_with(';') {
+        if input.is_empty() || input.trim().ends_with(';') {
             continue;
         }
         lexer.append(&input);
